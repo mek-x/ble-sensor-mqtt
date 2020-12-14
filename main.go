@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"time"
-	"encoding/binary"
 
 	"github.com/go-ble/ble"
 	"github.com/go-ble/ble/linux"
 	"github.com/go-ble/ble/linux/hci/cmd"
+
 	"github.com/pkg/errors"
 )
 
@@ -21,6 +23,18 @@ var (
 	user     = flag.String("user", "", "mqtt user name")
 	pass     = flag.String("pass", "", "mqtt password")
 )
+
+type payload struct {
+	Time   string  `json:"time"`
+	Epoch  int64   `json:"timestamp"`
+	RSSI   int     `json:"RSSI"`
+	T      float64 `json:"T"`
+	H      float64 `json:"H"`
+	P      float64 `json:"P"`
+	BattL  uint16  `json:"battLvl"`
+	BattV  float64 `json:"battVolt"`
+	Uptime uint32  `json:"uptime"`
+}
 
 func main() {
 	flag.Parse()
@@ -37,6 +51,10 @@ func main() {
 		scanParams.LEScanType = 0x01
 	}
 
+	if len(*url) > 0 {
+		establishMqtt(*url, *user, *pass)
+	}
+
 	d, err := linux.NewDevice(ble.OptScanParams(scanParams))
 	if err != nil {
 		log.Fatalf("can't get device : %s", err)
@@ -50,15 +68,15 @@ func main() {
 }
 
 func fromBytesToUint16(b []byte) uint16 {
-    bits := binary.LittleEndian.Uint16(b)
-    return bits
+	bits := binary.LittleEndian.Uint16(b)
+	return bits
 }
 
 func min(x, y uint16) uint16 {
-    if x <= y {
-        return x
-    }
-    return y
+	if x <= y {
+		return x
+	}
+	return y
 }
 
 func advHandler(a ble.Advertisement) {
@@ -68,6 +86,8 @@ func advHandler(a ble.Advertisement) {
 
 	t := time.Now()
 	fmt.Printf("%s: ", t.Format("2006-01-02 15:04:05"))
+
+	RSSI := a.RSSI()
 
 	fmt.Printf("RSSI = %ddBm", a.RSSI())
 
@@ -81,7 +101,7 @@ func advHandler(a ble.Advertisement) {
 		} else {
 			battery = 10 * (min(battery, 11) - 1)
 		}
-		batteryVoltage :=  (float64(battery) - 10) * 1.2 / 100 + 1.8
+		batteryVoltage := (float64(battery)-10)*1.2/100 + 1.8
 
 		rawTemp := fromBytesToUint16(md[8:10])
 		T := (175.72 * float64(rawTemp) * 4.0 / 65536) - 46.85
@@ -102,7 +122,7 @@ func advHandler(a ble.Advertisement) {
 			H = 100
 		}
 
-		uptime := uint32(fromBytesToUint16(md[12:14])) << 16 | uint32(fromBytesToUint16(md[14:16]))
+		uptime := uint32(fromBytesToUint16(md[12:14]))<<16 | uint32(fromBytesToUint16(md[14:16]))
 
 		fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds",
 			battery,
@@ -111,6 +131,22 @@ func advHandler(a ble.Advertisement) {
 			P,
 			H,
 			uptime)
+
+		msg := &payload{
+			RSSI:   RSSI,
+			T:      T,
+			P:      P,
+			H:      H,
+			Uptime: uptime,
+			BattL:  battery,
+			BattV:  batteryVoltage,
+			Time:   t.Format("2006-01-02 15:04:05"),
+			Epoch:  t.Unix(),
+		}
+
+		payload, _ := json.Marshal(msg)
+
+		publish(string(payload))
 	}
 	fmt.Printf("\n")
 }
