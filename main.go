@@ -15,9 +15,11 @@ import (
 )
 
 var (
-	devAddr = flag.String("a", "d0:f0:18:44:00:0c", "ble device address")
-	dup     = flag.Bool("d", false, "allow duplicate reported")
+	devAddr  = flag.String("a", "d0:f0:18:44:00:0c", "ble device address")
 	scanType = flag.Bool("as", false, "acitve scan")
+	url      = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
+	user     = flag.String("user", "", "mqtt user name")
+	pass     = flag.String("pass", "", "mqtt password")
 )
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 	// Scan for specified durantion, or until interrupted by user.
 	fmt.Printf("Scanning...\n")
 	ctx := ble.WithSigHandler(context.WithCancel(context.Background()))
-	chkErr(ble.Scan(ctx, *dup, advHandler, nil))
+	chkErr(ble.Scan(ctx, true, advHandler, nil))
 }
 
 func fromBytesToUint16(b []byte) uint16 {
