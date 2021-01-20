@@ -1,4 +1,4 @@
-module github.com/mek-x/inode_mqtt
+module github.com/mek-x/ble-sensor-mqtt
 
 go 1.15
 
