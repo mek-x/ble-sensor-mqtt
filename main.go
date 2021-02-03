@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"time"
 
@@ -14,18 +15,40 @@ import (
 	"github.com/go-ble/ble/linux/hci/cmd"
 
 	"github.com/pkg/errors"
+
+	"gopkg.in/yaml.v2"
 )
 
 const ver = "0.1.0"
 
 var (
-	devAddr  = flag.String("a", "d0:f0:18:44:00:0c", "ble device address")
+	devFile  = flag.String("dev", "devices.yml", "ble devices yaml file")
 	scanType = flag.Bool("as", false, "acitve scan")
 	url      = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
 	user     = flag.String("user", "", "mqtt user name")
 	pass     = flag.String("pass", "", "mqtt password")
 	verbose  = flag.Bool("V", false, "print broadcasted messages")
 )
+
+/* devices.yml example:
+```yaml
+devices:
+  "01:02:03:04:05:06":
+    type: ATC
+    name: room
+  "02:03:04:05:06:07":
+    type: inode
+	name: second_room
+```
+*/
+type devices struct {
+	Devices map[string]struct {
+		Type string
+		Name string
+	}
+}
+
+var dev devices
 
 type payload struct {
 	Time   string  `json:"time"`
@@ -41,6 +64,22 @@ type payload struct {
 
 func main() {
 	flag.Parse()
+
+	yamlFile, err := ioutil.ReadFile(*devFile)
+	if err != nil {
+		log.Printf("error, can't read devices file: %v ", err)
+	}
+
+	err = yaml.Unmarshal(yamlFile, &dev)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	fmt.Printf("ble-sensor-mqtt v%s. Scanning for devices:\n", ver)
+	for k := range dev.Devices {
+		fmt.Printf("%s: %s - %s\n", k, dev.Devices[k].Name, dev.Devices[k].Type)
+	}
+	fmt.Printf("\n")
 
 	scanParams := cmd.LESetScanParameters{
 		LEScanType:           0x00,   // 0x00: passive, 0x01: active
@@ -65,7 +104,6 @@ func main() {
 	ble.SetDefaultDevice(d)
 
 	// Scan for specified durantion, or until interrupted by user.
-	fmt.Printf("ble-sensor-mqtt v%s. Scanning...\n", ver)
 	ctx := ble.WithSigHandler(context.WithCancel(context.Background()))
 	chkErr(ble.Scan(ctx, true, advHandler, nil))
 }
@@ -83,7 +121,8 @@ func min(x, y uint16) uint16 {
 }
 
 func advHandler(a ble.Advertisement) {
-	if a.Addr().String() != *devAddr {
+	_, ok := dev.Devices[a.Addr().String()]
+	if !ok {
 		return
 	}
 

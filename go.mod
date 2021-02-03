@@ -6,4 +6,5 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.3.0
 	github.com/go-ble/ble v0.0.0-20200407180624-067514cd6e24
 	github.com/pkg/errors v0.9.1
+	gopkg.in/yaml.v2 v2.2.2
 )
