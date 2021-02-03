@@ -16,12 +16,15 @@ import (
 	"github.com/pkg/errors"
 )
 
+const ver = "0.1.0"
+
 var (
 	devAddr  = flag.String("a", "d0:f0:18:44:00:0c", "ble device address")
 	scanType = flag.Bool("as", false, "acitve scan")
 	url      = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
 	user     = flag.String("user", "", "mqtt user name")
 	pass     = flag.String("pass", "", "mqtt password")
+	verbose  = flag.Bool("V", false, "print broadcasted messages")
 )
 
 type payload struct {
@@ -62,7 +65,7 @@ func main() {
 	ble.SetDefaultDevice(d)
 
 	// Scan for specified durantion, or until interrupted by user.
-	fmt.Printf("Scanning...\n")
+	fmt.Printf("ble-sensor-mqtt v%s. Scanning...\n", ver)
 	ctx := ble.WithSigHandler(context.WithCancel(context.Background()))
 	chkErr(ble.Scan(ctx, true, advHandler, nil))
 }
@@ -85,11 +88,12 @@ func advHandler(a ble.Advertisement) {
 	}
 
 	t := time.Now()
-	fmt.Printf("%s: ", t.Format("2006-01-02 15:04:05"))
-
 	RSSI := a.RSSI()
 
-	fmt.Printf("RSSI = %ddBm", a.RSSI())
+	if *verbose {
+		fmt.Printf("%s: ", t.Format("2006-01-02 15:04:05"))
+		fmt.Printf("RSSI = %ddBm", a.RSSI())
+	}
 
 	if len(a.ManufacturerData()) > 0 {
 		md := a.ManufacturerData()
@@ -124,13 +128,15 @@ func advHandler(a ble.Advertisement) {
 
 		uptime := uint32(fromBytesToUint16(md[12:14]))<<16 | uint32(fromBytesToUint16(md[14:16]))
 
-		fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds",
-			battery,
-			batteryVoltage,
-			T,
-			P,
-			H,
-			uptime)
+		if *verbose {
+			fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds\n",
+				battery,
+				batteryVoltage,
+				T,
+				P,
+				H,
+				uptime)
+		}
 
 		msg := &payload{
 			RSSI:   RSSI,
@@ -148,7 +154,6 @@ func advHandler(a ble.Advertisement) {
 
 		publish(string(payload))
 	}
-	fmt.Printf("\n")
 }
 
 func chkErr(err error) {
