@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -103,18 +102,6 @@ func main() {
 	chkErr(ble.Scan(ctx, true, advHandler, nil))
 }
 
-func fromBytesToUint16(b []byte) uint16 {
-	bits := binary.LittleEndian.Uint16(b)
-	return bits
-}
-
-func min(x, y uint16) uint16 {
-	if x <= y {
-		return x
-	}
-	return y
-}
-
 func advHandler(a ble.Advertisement) {
 	d, ok := dev.Devices[a.Addr().String()]
 	if !ok {
@@ -125,6 +112,7 @@ func advHandler(a ble.Advertisement) {
 
 	data, e := DeviceParse(d.Type, a.ManufacturerData(), a.ServiceData())
 	if e != nil {
+		log.Printf("err: %v", e)
 		return
 	}
 
@@ -136,20 +124,21 @@ func advHandler(a ble.Advertisement) {
 	}
 
 	if *verbose {
-		fmt.Printf("%s: ", t.Format("2006-01-02 15:04:05"))
-		fmt.Printf("RSSI = %ddBm, addr = %s, name = %s\n", a.RSSI(), a.Addr().String(), d.Name)
-		fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds\n",
+		log.Printf("%s [%ddBm]: name = %s, type = %s, B = %d%% (%.1fV),"+
+			"T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %d\n",
+			a.Addr().String(),
+			a.RSSI(),
+			d.Name,
+			d.Type,
 			msg.BattL,
 			msg.BattV,
 			msg.T,
 			msg.P,
 			msg.H,
-			msg.Uptime)
+			msg.Count)
 	}
 
 	payload, _ := json.Marshal(msg)
-
-	fmt.Printf("%s\n", payload)
 
 	publish(string(payload), "/inode/data")
 

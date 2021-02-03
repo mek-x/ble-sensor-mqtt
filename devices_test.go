@@ -9,7 +9,7 @@ import (
 func TestParseATC(t *testing.T) {
 	sd := []ble.ServiceData{
 		{
-			UUID: []byte{0x18, 0x1a},
+			UUID: []byte{0x1a, 0x18},
 			Data: []byte{27, 50, 60, 56, 193, 164, 4, 9, 139, 13, 168, 11, 87, 23, 4},
 		},
 	}
@@ -19,7 +19,9 @@ func TestParseATC(t *testing.T) {
 		t.Errorf("Device parse returned an error: %v", e)
 	}
 
-	t.Errorf("%v", d)
+	if d.T < 23.0 || d.T > 23.1 {
+		t.Errorf("Parsing error, should be 23.08, got %f", d.T)
+	}
 }
 
 func TestParseInode(t *testing.T) {
@@ -30,5 +32,7 @@ func TestParseInode(t *testing.T) {
 		t.Errorf("Device parse returned an error: %v", e)
 	}
 
-	t.Errorf("%v", d)
+	if d.T < 4.25 || d.T > 4.27 {
+		t.Errorf("Parsing error, should be 4.2658154296875, got %f", d.T)
+	}
 }
