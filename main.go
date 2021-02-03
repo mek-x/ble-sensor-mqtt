@@ -21,12 +21,13 @@ import (
 const ver = "0.1.0"
 
 var (
-	devFile  = flag.String("dev", "devices.yml", "ble devices yaml file")
-	scanType = flag.Bool("as", false, "acitve scan")
-	url      = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
-	user     = flag.String("user", "", "mqtt user name")
-	pass     = flag.String("pass", "", "mqtt password")
-	verbose  = flag.Bool("V", false, "print broadcasted messages")
+	devFile     = flag.String("dev", "devices.yml", "ble devices yaml file")
+	scanType    = flag.Bool("as", false, "acitve scan")
+	url         = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
+	user        = flag.String("user", "", "mqtt user name")
+	pass        = flag.String("pass", "", "mqtt password")
+	verbose     = flag.Bool("V", false, "print broadcasted messages")
+	topicPrefix = flag.String("topicPre", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
 )
 
 /* devices.yml example:
@@ -50,9 +51,11 @@ type devices struct {
 var dev devices
 
 type payload struct {
-	Time  string `json:"time"`
-	Epoch int64  `json:"timestamp"`
-	RSSI  int    `json:"RSSI"`
+	Time    string `json:"time"`
+	Epoch   int64  `json:"timestamp"`
+	RSSI    int    `json:"RSSI"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
 	DevData
 }
 
@@ -120,6 +123,8 @@ func advHandler(a ble.Advertisement) {
 		Time:    t.Format("2006-01-02 15:04:05"),
 		Epoch:   t.Unix(),
 		RSSI:    a.RSSI(),
+		Name:    d.Name,
+		Address: a.Addr().String(),
 		DevData: *data,
 	}
 
@@ -140,7 +145,11 @@ func advHandler(a ble.Advertisement) {
 
 	payload, _ := json.Marshal(msg)
 
-	publish(string(payload), "/inode/data")
+	topic := *topicPrefix + "/" + d.Name
+
+	fmt.Printf("%s: %s\n", topic, payload)
+
+	publish(string(payload), topic)
 
 }
 
