@@ -51,15 +51,10 @@ type devices struct {
 var dev devices
 
 type payload struct {
-	Time   string  `json:"time"`
-	Epoch  int64   `json:"timestamp"`
-	RSSI   int     `json:"RSSI"`
-	T      float64 `json:"T"`
-	H      float64 `json:"H"`
-	P      float64 `json:"P"`
-	BattL  uint16  `json:"battLvl"`
-	BattV  float64 `json:"battVolt"`
-	Uptime uint32  `json:"uptime"`
+	Time  string `json:"time"`
+	Epoch int64  `json:"timestamp"`
+	RSSI  int    `json:"RSSI"`
+	DevData
 }
 
 func main() {
@@ -121,78 +116,43 @@ func min(x, y uint16) uint16 {
 }
 
 func advHandler(a ble.Advertisement) {
-	_, ok := dev.Devices[a.Addr().String()]
+	d, ok := dev.Devices[a.Addr().String()]
 	if !ok {
 		return
 	}
 
 	t := time.Now()
-	RSSI := a.RSSI()
+
+	data, e := DeviceParse(d.Type, a.ManufacturerData(), a.ServiceData())
+	if e != nil {
+		return
+	}
+
+	msg := &payload{
+		Time:    t.Format("2006-01-02 15:04:05"),
+		Epoch:   t.Unix(),
+		RSSI:    a.RSSI(),
+		DevData: *data,
+	}
 
 	if *verbose {
 		fmt.Printf("%s: ", t.Format("2006-01-02 15:04:05"))
-		fmt.Printf("RSSI = %ddBm", a.RSSI())
+		fmt.Printf("RSSI = %ddBm, addr = %s, name = %s\n", a.RSSI(), a.Addr().String(), d.Name)
+		fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds\n",
+			msg.BattL,
+			msg.BattV,
+			msg.T,
+			msg.P,
+			msg.H,
+			msg.Uptime)
 	}
 
-	if len(a.ManufacturerData()) > 0 {
-		md := a.ManufacturerData()
+	payload, _ := json.Marshal(msg)
 
-		rawBattery := fromBytesToUint16(md[2:4])
-		battery := (rawBattery >> 12) & 0xff
-		if battery == 1 {
-			battery = 100
-		} else {
-			battery = 10 * (min(battery, 11) - 1)
-		}
-		batteryVoltage := (float64(battery)-10)*1.2/100 + 1.8
+	fmt.Printf("%s\n", payload)
 
-		rawTemp := fromBytesToUint16(md[8:10])
-		T := (175.72 * float64(rawTemp) * 4.0 / 65536) - 46.85
-		if T < -30 {
-			T = -30.0
-		} else if T > 70 {
-			T = 70.0
-		}
+	publish(string(payload), "/inode/data")
 
-		rawPressure := fromBytesToUint16(md[6:8])
-		P := float64(rawPressure) / 16.0
-
-		rawHumidity := fromBytesToUint16(md[10:12])
-		H := (125 * float64(rawHumidity) * 4.0 / 65536) - 6.0
-		if H < 1 {
-			H = 1.0
-		} else if H > 100 {
-			H = 100
-		}
-
-		uptime := uint32(fromBytesToUint16(md[12:14]))<<16 | uint32(fromBytesToUint16(md[14:16]))
-
-		if *verbose {
-			fmt.Printf(", B = %d%% (%.1fV), T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %ds\n",
-				battery,
-				batteryVoltage,
-				T,
-				P,
-				H,
-				uptime)
-		}
-
-		msg := &payload{
-			RSSI:   RSSI,
-			T:      T,
-			P:      P,
-			H:      H,
-			Uptime: uptime,
-			BattL:  battery,
-			BattV:  batteryVoltage,
-			Time:   t.Format("2006-01-02 15:04:05"),
-			Epoch:  t.Unix(),
-		}
-
-		payload, _ := json.Marshal(msg)
-
-		publish(string(payload), "/inode/data")
-	}
 }
 
 func chkErr(err error) {
