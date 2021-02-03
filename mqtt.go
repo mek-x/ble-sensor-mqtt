@@ -10,15 +10,15 @@ import (
 )
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+	fmt.Printf("MQTT received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 }
 
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	fmt.Println("Connected")
+	fmt.Println("MQTT connected to broker")
 }
 
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	fmt.Printf("Connect lost: %v", err)
+	fmt.Printf("MQTT connection lost: %v", err)
 }
 
 var client mqtt.Client
@@ -49,7 +49,7 @@ func establishMqtt(url string, user string, pass string) {
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(url)
-	opts.SetClientID("inode-" + randomString(5))
+	opts.SetClientID("ble-sensor-mqtt-" + randomString(5))
 	opts.SetUsername(user)
 	opts.SetPassword(pass)
 	opts.SetDefaultPublishHandler(messagePubHandler)
