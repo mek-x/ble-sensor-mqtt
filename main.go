@@ -152,7 +152,7 @@ func advHandler(a ble.Advertisement) {
 
 		payload, _ := json.Marshal(msg)
 
-		publish(string(payload))
+		publish(string(payload), "/inode/data")
 	}
 }
 

@@ -64,8 +64,12 @@ func establishMqtt(url string, user string, pass string) {
 	}
 }
 
-func publish(payload string) {
+func publish(payload string, topic string) {
 	if client == nil {
+		return
+	}
+
+	if topic == "" {
 		return
 	}
 
@@ -73,5 +77,5 @@ func publish(payload string) {
 		return
 	}
 
-	client.Publish("/inode/data", 0, true, payload)
+	client.Publish(topic, 0, true, payload)
 }
