@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const ver = "0.1.0"
+const ver = "0.2.0"
 
 var (
 	devFile     = flag.String("dev", "devices.yml", "ble devices yaml file")
@@ -147,10 +147,7 @@ func advHandler(a ble.Advertisement) {
 
 	topic := *topicPrefix + "/" + d.Name
 
-	fmt.Printf("%s: %s\n", topic, payload)
-
 	publish(string(payload), topic)
-
 }
 
 func chkErr(err error) {
