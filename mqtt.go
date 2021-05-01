@@ -55,6 +55,8 @@ func establishMqtt(url string, user string, pass string) {
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
+	opts.SetAutoReconnect(true)
+	opts.SetConnectRetry(true)
 
 	opts.SetTLSConfig(&ssl)
 
