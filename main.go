@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const ver = "0.2.0"
+const ver = "0.2.1"
 
 var (
 	devFile     = flag.String("dev", "devices.yml", "ble devices yaml file")
