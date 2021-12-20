@@ -14,6 +14,9 @@ docker-build:
   # Use the official docker image.
   image: docker:latest
   stage: build
+  # automatically trigger pipeline on tags only
+  only:
+    - tags
   services:
     - docker:dind
   before_script:
