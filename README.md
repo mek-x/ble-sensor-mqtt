@@ -1,5 +1,7 @@
 # ble-sensor-mqtt
 
+[![pipeline status](https://gitlab.com/mek_x/ble-sensor-mqtt/badges/master/pipeline.svg)](https://gitlab.com/mek_x/ble-sensor-mqtt/-/commits/master)
+
 This project is intended to be simple application used to acquire various sensor data (mainly weather data, i.e. temperature, humidity, pressure)
 from Bluetooth (BLE) devices and publish them to configured MQTT broker for further processing.
 
