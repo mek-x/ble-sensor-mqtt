@@ -30,8 +30,8 @@ func main() {
 			if len(entry) != 3 {
 				continue
 			}
-			fmt.Println(pair[0], "=" , pair[1])
-			devices[entry[0]] = device{ Type: entry[1], Name: entry[2] }
+			fmt.Println(pair[0], "=", pair[1])
+			devices[entry[0]] = device{Type: entry[1], Name: entry[2]}
 		case pair[0] == "BLE_MQTT_URL":
 			options["url"] = pair[1]
 		case pair[0] == "BLE_MQTT_USER":
@@ -57,7 +57,7 @@ func main() {
 	args = append(args, os.Args[1])
 
 	for k, v := range options {
-		args = append(args, "-" + k)
+		args = append(args, "-"+k)
 		args = append(args, v)
 	}
 
