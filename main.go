@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -110,8 +109,6 @@ func main() {
 	}
 
 	cfg.updateFromEnv()
-
-	fmt.Printf("%v\n", cfg)
 
 	if len(cfg.Devices) == 0 {
 		log.Fatalf("no devices configured. Stopping...")
