@@ -87,6 +87,7 @@ func (c *config) updateFromEnv() {
 func main() {
 	log.Printf("ble-sensor-mqtt v. %s", ver)
 
+	cfg.Devices = make(map[string]device)
 	cfg.Options = make(map[string]interface{})
 	cfg.Options["cfgFile"] = *flag.String("c", "ble-sensor-mqtt.yml", "config file (yaml format)")
 	cfg.Options["activeScan"] = *flag.Bool("as", false, "acitve scan")
