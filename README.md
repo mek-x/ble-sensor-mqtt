@@ -100,6 +100,18 @@ VERSION=devel ko build -L
 
 Please see the **ko** [documentation](https://ko.build/) for additional options and how to build for other platforms.
 
+## Ready to use docker images
+
+Currently images are being built and deployed automatically to gitlab
+registry available [here](https://gitlab.com/mek_x/ble-sensor-mqtt/container_registry).
+
+The images are built in several flavours: multi-platform manifest (latest and without architecture specific tags), for x86, armv6 (e.g. rpi zero), armv7 (e.g. rpi2), arm64 (e.g. rpi4).
+
+In order to use them simply use this command:
+
+```sh
+docker pull registry.gitlab.com/mek_x/ble-sensor-mqtt:latest
+```
 ## License
 
 - MIT
