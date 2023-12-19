@@ -19,9 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const ver = "dev"
-
-var ()
+var ver = "dev"
 
 /*
 	devices.yml example:
