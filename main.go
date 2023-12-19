@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-ble/ble"
@@ -18,37 +19,35 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const ver = "0.3.0"
+const ver = "dev"
 
-var (
-	devFile     = flag.String("dev", "devices.yml", "ble devices yaml file")
-	scanType    = flag.Bool("as", false, "acitve scan")
-	url         = flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
-	user        = flag.String("user", "", "mqtt user name")
-	pass        = flag.String("pass", "", "mqtt password")
-	verbose     = flag.Bool("V", false, "print broadcasted messages")
-	topicPrefix = flag.String("topicPre", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
-)
+var ()
 
-/* devices.yml example:
+/*
+	devices.yml example:
+
 ```yaml
 devices:
-  "01:02:03:04:05:06":
-    type: ATC
-    name: room
-  "02:03:04:05:06:07":
-    type: inode
-	name: second_room
+
+	  "01:02:03:04:05:06":
+	    type: ATC
+	    name: room
+	  "02:03:04:05:06:07":
+	    type: inode
+		name: second_room
+
 ```
 */
-type devices struct {
-	Devices map[string]struct {
-		Type string
-		Name string
-	}
+
+type device struct {
+	Type string
+	Name string
 }
 
-var dev devices
+type config struct {
+	Devices map[string]device
+	Options map[string]interface{}
+}
 
 type payload struct {
 	Time    string `json:"time"`
@@ -59,24 +58,70 @@ type payload struct {
 	DevData
 }
 
+var cfg config
+
+func (c *config) updateFromEnv() {
+	env := os.Environ()
+
+	for _, e := range env {
+		pair := strings.SplitN(e, "=", 2)
+		switch {
+		case strings.HasPrefix(pair[0], "BLE_DEVICE_"):
+			entry := strings.SplitN(pair[1], ",", 3)
+			if len(entry) != 3 {
+				continue
+			}
+			c.Devices[entry[0]] = device{Type: entry[1], Name: entry[2]}
+		case pair[0] == "BLE_MQTT_URL":
+			c.Options["url"] = pair[1]
+		case pair[0] == "BLE_MQTT_USER":
+			c.Options["user"] = pair[1]
+		case pair[0] == "BLE_MQTT_PASS":
+			c.Options["pass"] = pair[1]
+		case pair[0] == "BLE_MQTT_PFX":
+			c.Options["topicPrefix"] = pair[1]
+		}
+	}
+}
+
 func main() {
+	log.Printf("ble-sensor-mqtt v. %s", ver)
+
+	cfg.Options = make(map[string]interface{})
+	cfg.Options["cfgFile"] = *flag.String("c", "ble-sensor-mqtt.yml", "config file (yaml format)")
+	cfg.Options["activeScan"] = *flag.Bool("as", false, "acitve scan")
+	cfg.Options["url"] = *flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
+	cfg.Options["user"] = *flag.String("user", "", "mqtt user name")
+	cfg.Options["pass"] = *flag.String("pass", "", "mqtt password")
+	cfg.Options["verbose"] = *flag.Bool("V", false, "print broadcasted messages")
+	cfg.Options["topicPrefix"] = *flag.String("pfx", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
+
 	flag.Parse()
 
-	yamlFile, err := ioutil.ReadFile(*devFile)
-	if err != nil {
-		log.Printf("error, can't read devices file: %v ", err)
+	if _, err := os.Stat(cfg.Options["cfgFile"].(string)); err == nil {
+		yamlFile, err := os.ReadFile(cfg.Options["cfgFile"].(string))
+		if err != nil {
+			log.Fatalf("error, can't read devices file: %v ", err)
+		}
+
+		err = yaml.Unmarshal(yamlFile, &cfg)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
 	}
 
-	err = yaml.Unmarshal(yamlFile, &dev)
-	if err != nil {
-		log.Fatalf("error: %v", err)
+	cfg.updateFromEnv()
+
+	fmt.Printf("%v\n", cfg)
+
+	if len(cfg.Devices) == 0 {
+		log.Fatalf("no devices configured. Stopping...")
 	}
 
-	fmt.Printf("ble-sensor-mqtt v%s. Scanning for devices:\n", ver)
-	for k := range dev.Devices {
-		fmt.Printf("%s: %s - %s\n", k, dev.Devices[k].Name, dev.Devices[k].Type)
+	log.Print("scanning for devices:")
+	for k := range cfg.Devices {
+		log.Printf("%s: %s - %s", k, cfg.Devices[k].Name, cfg.Devices[k].Type)
 	}
-	fmt.Printf("\n")
 
 	scanParams := cmd.LESetScanParameters{
 		LEScanType:           0x00,   // 0x00: passive, 0x01: active
@@ -86,12 +131,17 @@ func main() {
 		ScanningFilterPolicy: 0x00,   // 0x00: accept all, 0x01: ignore non-white-listed.
 	}
 
-	if *scanType {
+	if cfg.Options["activeScan"].(bool) {
 		scanParams.LEScanType = 0x01
 	}
 
-	if len(*url) > 0 {
-		establishMqtt(*url, *user, *pass)
+	if len(cfg.Options["url"].(string)) > 0 {
+		establishMqtt(
+			cfg.Options["url"].(string),
+			cfg.Options["user"].(string),
+			cfg.Options["pass"].(string),
+		)
+
 	}
 
 	d, err := linux.NewDevice(ble.OptScanParams(scanParams))
@@ -106,7 +156,7 @@ func main() {
 }
 
 func advHandler(a ble.Advertisement) {
-	d, ok := dev.Devices[a.Addr().String()]
+	d, ok := cfg.Devices[a.Addr().String()]
 	if !ok {
 		return
 	}
@@ -128,9 +178,9 @@ func advHandler(a ble.Advertisement) {
 		DevData: *data,
 	}
 
-	if *verbose {
+	if cfg.Options["verbose"].(bool) {
 		log.Printf("%s [%ddBm]: name = %s, type = %s, B = %d%% (%.1fV),"+
-			"T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %d\n",
+			"T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %d",
 			a.Addr().String(),
 			a.RSSI(),
 			d.Name,
@@ -145,7 +195,7 @@ func advHandler(a ble.Advertisement) {
 
 	payload, _ := json.Marshal(msg)
 
-	topic := *topicPrefix + "/" + d.Name
+	topic := cfg.Options["topicPrefix"].(string) + "/" + d.Name
 
 	publish(string(payload), topic)
 }
@@ -154,9 +204,9 @@ func chkErr(err error) {
 	switch errors.Cause(err) {
 	case nil:
 	case context.DeadlineExceeded:
-		fmt.Printf("done\n")
+		log.Printf("done")
 	case context.Canceled:
-		fmt.Printf("canceled\n")
+		log.Printf("canceled")
 	default:
 		log.Fatalf(err.Error())
 	}
