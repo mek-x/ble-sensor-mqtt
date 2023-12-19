@@ -20,30 +20,24 @@ compile:
     paths:
       - $CI_PROJECT_NAME
 
-docker-build:
-  # Use the official docker image.
-  image: docker:latest
+deploy:
   stage: deploy
-  services:
-    - docker:dind
   before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-  # Default branch leaves tag empty (= latest tag)
-  # All other branches are tagged with the escaped branch name (commit ref slug)
+    - go install github.com/google/ko@latest
+    - ko login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
     - |
       if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
         tag=""
         echo "Running on default branch '$CI_DEFAULT_BRANCH': tag = 'latest'"
       else
-        tag=":$CI_COMMIT_REF_NAME"
+        tag="$CI_COMMIT_REF_NAME"
         echo "Running on branch '$CI_COMMIT_BRANCH': tag = $tag"
       fi
-    - docker build --pull -t "$CI_REGISTRY_IMAGE${tag}" .
-    - docker push "$CI_REGISTRY_IMAGE${tag}"
-  # Run this job in a branch where a Dockerfile exists
+    - KO_DOCKER_REPO=$CI_REGISTRY_IMAGE VERSION=${tag} ko build --bare --tags ${tag},latest --platform=linux/amd64,linux/arm64,linux/arm
+    - KO_DOCKER_REPO=$CI_REGISTRY_IMAGE VERSION=${tag} ko build --bare --tags ${tag}-amd64 --platform=linux/amd64
+    - KO_DOCKER_REPO=$CI_REGISTRY_IMAGE VERSION=${tag} ko build --bare --tags ${tag}-aarch64 --platform=linux/arm64
+    - KO_DOCKER_REPO=$CI_REGISTRY_IMAGE VERSION=${tag} ko build --bare --tags ${tag}-armv6hf,${tag}-armv7hf --platform=linux/arm
   rules:
-    - if: $CI_COMMIT_TAG
-      exists:
-        - Dockerfile
+    - if: $CI_COMMIT_TAG != null
     - if: $CI_PIPELINE_SOURCE == "web"
