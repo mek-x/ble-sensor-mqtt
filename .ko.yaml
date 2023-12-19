@@ -1,0 +1,11 @@
+builds:
+- id: main
+  dir: .
+  main: .
+  flags:
+  - -tags
+  - netgo
+  ldflags:
+  - -s -w
+  - -extldflags "-static"
+  - -X main.ver={{.Env.VERSION}}
