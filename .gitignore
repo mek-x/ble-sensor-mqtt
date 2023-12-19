@@ -1,2 +1,3 @@
 ble-sensor-mqtt
-devices.yml
+ble-sensor-mqtt.yml
+envs
