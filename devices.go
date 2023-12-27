@@ -9,8 +9,11 @@ import (
 
 type DevData struct {
 	T     float64 `json:"T"`
+	RawT  uint16  `json:"rT"`
 	H     float64 `json:"H"`
+	RawH  uint16  `json:"rH"`
 	P     float64 `json:"P"`
+	RawP  uint16  `json:"rP"`
 	BattL uint16  `json:"battLvl"`
 	BattV float64 `json:"battVolt"`
 	Count uint32  `json:"count"`
@@ -80,14 +83,16 @@ union {
 func atcCustomParse(d []byte) *DevData {
 	var ret = new(DevData)
 
-	rawTemp := int16(binary.LittleEndian.Uint16(d[6:8]))
+	rawTemp := binary.LittleEndian.Uint16(d[6:8])
 	rawHumi := binary.LittleEndian.Uint16(d[8:10])
 	rawBVolt := binary.LittleEndian.Uint16(d[10:12])
 	rawBPercent := uint8(d[12])
 	rawCount := uint8(d[13])
 
-	ret.T = float64(rawTemp) / 100.0
+	ret.T = float64(int16(rawTemp)) / 100.0
+	ret.RawT = rawTemp
 	ret.H = float64(rawHumi) / 100.0
+	ret.RawH = rawHumi
 	ret.BattV = float64(rawBVolt) / 1000.0
 	ret.BattL = uint16(rawBPercent)
 	ret.Count = uint32(rawCount)
@@ -153,8 +158,11 @@ func inodeParser(md []byte, _ []ble.ServiceData) (*DevData, error) {
 
 	ret := &DevData{
 		T:     T,
+		RawT:  rawTemp,
 		P:     P,
+		RawP:  rawPressure,
 		H:     H,
+		RawH:  rawHumidity,
 		Count: uptime,
 		BattL: battery,
 		BattV: batteryVoltage,
