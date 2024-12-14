@@ -1,9 +1,11 @@
 # ble-sensor-mqtt
 
-[![pipeline status](https://gitlab.com/mek_x/ble-sensor-mqtt/badges/master/pipeline.svg)](https://gitlab.com/mek_x/ble-sensor-mqtt/-/commits/master)
+[![pipeline
+status](https://gitlab.com/mek_x/ble-sensor-mqtt/badges/master/pipeline.svg)](https://gitlab.com/mek_x/ble-sensor-mqtt/-/commits/master)
 
-This project is intended to be simple application used to acquire various sensor data (mainly weather data, i.e. temperature, humidity, pressure)
-from Bluetooth (BLE) devices and publish them to configured MQTT broker for further processing.
+This project is intended to be simple application used to acquire various sensor data (mainly weather data, i.e.
+temperature, humidity, pressure) from Bluetooth (BLE) devices and publish them to configured MQTT broker for further
+processing.
 
 ## Supported devices
 
@@ -15,7 +17,8 @@ Supported and tested devices are:
 ## Basis of operation
 
 Application uses on-board bluetooth device (hci0) in scanning mode to listen for advertisement packets from devices.
-When packet is received it is parsed and sent to configured MQTT broker (so far only brokers with TLS connectivity are supported).
+When packet is received it is parsed and sent to configured MQTT broker (so far only brokers with TLS connectivity are
+supported).
 
 ```
       adv packet                     device present            packet successfully
@@ -33,7 +36,7 @@ When packet is received it is parsed and sent to configured MQTT broker (so far 
 Usage of ./ble-sensor-mqtt:
   -V    print broadcasted messages
   -as
-        acitve scan
+        active scan
   -c string
         config file (yaml format) (default "ble-sensor-mqtt.yml")
   -pass string
@@ -74,7 +77,7 @@ Where:
 - _name_ - friendly name, used in mqtt topic: Full topic is `{topicPrefix}/{name}`.
 - _topicPrefix_ - MQTT prefix. Name has to contain only characters supported by MQTT topics.
 
-Alternatively, these options could be overriden by using environment variables.
+Alternatively, these options could be overridden by using environment variables.
 
 ### Supported environment variables
 
@@ -82,13 +85,18 @@ Alternatively, these options could be overriden by using environment variables.
 - `BLE_MQTT_USER` - _user_ for mqtt host auth
 - `BLE_MQTT_PASS` - _pass_ for mqtt host auth
 - `BLE_MQTT_PFX` - MQTT _topicPrefix_. Full topic will be `{pfx}/{deviceName}`
-- `BLE_DEVICE_#` - device to add to config file, format is `mac,type,name`, e.g. `BLE_DEVICE_0=aa:bb:cc:dd:ee:ff,ATC,example`, `#` is a number.
+- `BLE_DEVICE_#` - device to add to config file, format is `mac,type,name`, e.g.
+  `BLE_DEVICE_0=aa:bb:cc:dd:ee:ff,ATC,example`, `#` is a number.
+- `BLE_MQTT_INTER` - in seconds, how often to send messages to broker, 0 (default) mean send as soon as adv ble packet
+  received
+- `BLE_HASS_DSCVR` - enable Home Assistant MQTT Discovery (value may be `1`, `on` or `true` to enable, everything else to disable)
 
 ## Building
 
 In the easiest way, just do `go build`. Golang is required (tested on Linux).
 
-Additionally, [ko](https://ko.build/install/) is used to create minimal container with the application. To build your own container:
+Additionally, [ko](https://ko.build/install/) is used to create minimal container with the application. To build your
+own container:
 
 ```sh
 # install ko
@@ -102,16 +110,23 @@ Please see the **ko** [documentation](https://ko.build/) for additional options 
 
 ## Ready to use docker images
 
-Currently images are being built and deployed automatically to gitlab
-registry available [here](https://gitlab.com/mek_x/ble-sensor-mqtt/container_registry).
+Currently images are being built and deployed automatically to gitlab registry available
+[here](https://gitlab.com/mek_x/ble-sensor-mqtt/container_registry).
 
-The images are built in several flavours: multi-platform manifest (latest and without architecture specific tags), for x86, armv6 (e.g. rpi zero), armv7 (e.g. rpi2), arm64 (e.g. rpi4).
+The images are built in several flavours: multi-platform manifest (latest and without architecture specific tags), for
+x86, armv6 (e.g. rpi zero), armv7 (e.g. rpi2), arm64 (e.g. rpi4).
 
 In order to use them simply use this command:
 
 ```sh
 docker pull registry.gitlab.com/mek_x/ble-sensor-mqtt:latest
 ```
+
+## Support for Home Assistant MQTT discovery
+
+Starting with version `v0.5.0` I've added preliminary support for [Home Assistant MQTT
+Discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery).
+
 ## License
 
 - MIT
