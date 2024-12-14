@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,11 +50,14 @@ type Opts struct {
 	Pass        string
 	Verbose     bool
 	TopicPrefix string
+	Interval    int
 }
 
 type config struct {
 	Devices map[string]device
 	Options Opts
+	msgPipe chan payload
+	mqtt    mqttConnection
 }
 
 type payload struct {
@@ -64,6 +68,8 @@ type payload struct {
 	Address string `json:"address"`
 	DevData
 }
+
+type measurement map[string]payload
 
 var cfg config
 
@@ -87,6 +93,12 @@ func (c *config) updateFromEnv() {
 			c.Options.Pass = pair[1]
 		case pair[0] == "BLE_MQTT_PFX":
 			c.Options.TopicPrefix = pair[1]
+		case pair[0] == "BLE_MQTT_INTER":
+			var err error
+			c.Options.Interval, err = strconv.Atoi(pair[1])
+			if err != nil {
+				c.Options.Interval = 0
+			}
 		}
 	}
 }
@@ -102,6 +114,7 @@ func main() {
 	flag.StringVar(&cfg.Options.Pass, "pass", "", "mqtt password")
 	flag.BoolVar(&cfg.Options.Verbose, "V", false, "print broadcasted messages")
 	flag.StringVar(&cfg.Options.TopicPrefix, "pfx", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
+	flag.IntVar(&cfg.Options.Interval, "t", 0, "how often send messages to broker in seconds, 0 - as soon as packet received")
 
 	flag.Parse()
 
@@ -141,13 +154,19 @@ func main() {
 	}
 
 	if len(cfg.Options.Url) > 0 {
-		establishMqtt(
+		cfg.mqtt = establishMqtt(
 			cfg.Options.Url,
 			cfg.Options.User,
 			cfg.Options.Pass,
 		)
-
+		defer func() {
+			log.Println("Disconnect")
+			cfg.mqtt.endConnection()
+		}()
 	}
+
+	cfg.msgPipe = make(chan payload)
+	defer close(cfg.msgPipe)
 
 	d, err := linux.NewDevice(ble.OptScanParams(scanParams))
 	if err != nil {
@@ -155,12 +174,13 @@ func main() {
 	}
 	ble.SetDefaultDevice(d)
 
+	go cfg.sender()
 	// Scan for specified durantion, or until interrupted by user.
 	ctx := ble.WithSigHandler(context.WithCancel(context.Background()))
-	chkErr(ble.Scan(ctx, true, advHandler, nil))
+	chkErr(ble.Scan(ctx, true, cfg.advHandler, nil))
 }
 
-func advHandler(a ble.Advertisement) {
+func (cfg *config) advHandler(a ble.Advertisement) {
 	d, ok := cfg.Devices[a.Addr().String()]
 	if !ok {
 		return
@@ -174,7 +194,7 @@ func advHandler(a ble.Advertisement) {
 		return
 	}
 
-	msg := &payload{
+	msg := payload{
 		Time:    t.Format("2006-01-02 15:04:05"),
 		Epoch:   t.Unix(),
 		RSSI:    a.RSSI(),
@@ -198,11 +218,41 @@ func advHandler(a ble.Advertisement) {
 			msg.Count)
 	}
 
+	cfg.msgPipe <- msg
+}
+
+func (cfg *config) sendPayload(msg payload) {
 	payload, _ := json.Marshal(msg)
+	topic := cfg.Options.TopicPrefix + "/" + msg.Name
 
-	topic := cfg.Options.TopicPrefix + "/" + d.Name
+	log.Println(string(payload))
+	cfg.mqtt.publish(string(payload), topic)
+}
 
-	publish(string(payload), topic)
+func (cfg *config) sender() {
+
+	measurements := make(measurement)
+	var ticker *time.Ticker
+	if cfg.Options.Interval > 0 {
+		ticker = time.NewTicker(time.Duration(cfg.Options.Interval) * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case msg := <-cfg.msgPipe:
+				measurements[msg.Address] = msg
+			case <-ticker.C:
+				for _, msg := range measurements {
+					cfg.sendPayload(msg)
+				}
+			}
+		}
+	} else {
+		for {
+			msg := <-cfg.msgPipe
+			cfg.sendPayload(msg)
+		}
+	}
 }
 
 func chkErr(err error) {

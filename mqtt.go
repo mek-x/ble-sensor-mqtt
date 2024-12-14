@@ -9,6 +9,10 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+type mqttConnection struct {
+	c mqtt.Client
+}
+
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("MQTT received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 }
@@ -20,8 +24,6 @@ var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
 	fmt.Printf("MQTT connection lost: %v", err)
 }
-
-var client mqtt.Client
 
 const charset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -41,7 +43,7 @@ func randomString(length int) string {
 	return stringWithCharset(length, charset)
 }
 
-func establishMqtt(url string, user string, pass string) {
+func establishMqtt(url string, user string, pass string) mqttConnection {
 
 	ssl := tls.Config{
 		RootCAs: nil,
@@ -60,14 +62,23 @@ func establishMqtt(url string, user string, pass string) {
 
 	opts.SetTLSConfig(&ssl)
 
-	client = mqtt.NewClient(opts)
+	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
+
+	return mqttConnection{c: client}
 }
 
-func publish(payload string, topic string) {
-	if client == nil {
+func (m *mqttConnection) endConnection() {
+	if m.c == nil {
+		return
+	}
+	m.c.Disconnect(0)
+}
+
+func (m *mqttConnection) publish(payload string, topic string) {
+	if m.c == nil {
 		return
 	}
 
@@ -75,9 +86,9 @@ func publish(payload string, topic string) {
 		return
 	}
 
-	if !client.IsConnected() {
+	if !m.c.IsConnected() {
 		return
 	}
 
-	client.Publish(topic, 0, true, payload)
+	m.c.Publish(topic, 0, true, payload)
 }
