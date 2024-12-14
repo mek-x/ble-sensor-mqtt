@@ -41,9 +41,19 @@ type device struct {
 	Name string
 }
 
+type Opts struct {
+	CfgFile     string
+	ActiveScan  bool
+	Url         string
+	User        string
+	Pass        string
+	Verbose     bool
+	TopicPrefix string
+}
+
 type config struct {
 	Devices map[string]device
-	Options map[string]interface{}
+	Options Opts
 }
 
 type payload struct {
@@ -70,13 +80,13 @@ func (c *config) updateFromEnv() {
 			}
 			c.Devices[entry[0]] = device{Type: entry[1], Name: entry[2]}
 		case pair[0] == "BLE_MQTT_URL":
-			c.Options["url"] = pair[1]
+			c.Options.Url = pair[1]
 		case pair[0] == "BLE_MQTT_USER":
-			c.Options["user"] = pair[1]
+			c.Options.User = pair[1]
 		case pair[0] == "BLE_MQTT_PASS":
-			c.Options["pass"] = pair[1]
+			c.Options.Pass = pair[1]
 		case pair[0] == "BLE_MQTT_PFX":
-			c.Options["topicPrefix"] = pair[1]
+			c.Options.TopicPrefix = pair[1]
 		}
 	}
 }
@@ -85,19 +95,18 @@ func main() {
 	log.Printf("ble-sensor-mqtt v. %s", ver)
 
 	cfg.Devices = make(map[string]device)
-	cfg.Options = make(map[string]interface{})
-	cfg.Options["cfgFile"] = *flag.String("c", "ble-sensor-mqtt.yml", "config file (yaml format)")
-	cfg.Options["activeScan"] = *flag.Bool("as", false, "acitve scan")
-	cfg.Options["url"] = *flag.String("url", "", "mqtt host url, e.g. ssl://host.com:8883")
-	cfg.Options["user"] = *flag.String("user", "", "mqtt user name")
-	cfg.Options["pass"] = *flag.String("pass", "", "mqtt password")
-	cfg.Options["verbose"] = *flag.Bool("V", false, "print broadcasted messages")
-	cfg.Options["topicPrefix"] = *flag.String("pfx", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
+	flag.StringVar(&cfg.Options.CfgFile, "c", "ble-sensor-mqtt.yml", "config file (yaml format)")
+	flag.BoolVar(&cfg.Options.ActiveScan, "as", false, "acitve scan")
+	flag.StringVar(&cfg.Options.Url, "url", "", "mqtt host url, e.g. ssl://host.com:8883")
+	flag.StringVar(&cfg.Options.User, "user", "", "mqtt user name")
+	flag.StringVar(&cfg.Options.Pass, "pass", "", "mqtt password")
+	flag.BoolVar(&cfg.Options.Verbose, "V", false, "print broadcasted messages")
+	flag.StringVar(&cfg.Options.TopicPrefix, "pfx", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
 
 	flag.Parse()
 
-	if _, err := os.Stat(cfg.Options["cfgFile"].(string)); err == nil {
-		yamlFile, err := os.ReadFile(cfg.Options["cfgFile"].(string))
+	if _, err := os.Stat(cfg.Options.CfgFile); err == nil {
+		yamlFile, err := os.ReadFile(cfg.Options.CfgFile)
 		if err != nil {
 			log.Fatalf("error, can't read devices file: %v ", err)
 		}
@@ -127,15 +136,15 @@ func main() {
 		ScanningFilterPolicy: 0x00,   // 0x00: accept all, 0x01: ignore non-white-listed.
 	}
 
-	if cfg.Options["activeScan"].(bool) {
+	if cfg.Options.ActiveScan {
 		scanParams.LEScanType = 0x01
 	}
 
-	if len(cfg.Options["url"].(string)) > 0 {
+	if len(cfg.Options.Url) > 0 {
 		establishMqtt(
-			cfg.Options["url"].(string),
-			cfg.Options["user"].(string),
-			cfg.Options["pass"].(string),
+			cfg.Options.Url,
+			cfg.Options.User,
+			cfg.Options.Pass,
 		)
 
 	}
@@ -174,7 +183,7 @@ func advHandler(a ble.Advertisement) {
 		DevData: *data,
 	}
 
-	if cfg.Options["verbose"].(bool) {
+	if cfg.Options.Verbose {
 		log.Printf("%s [%ddBm]: name = %s, type = %s, B = %d%% (%.1fV),"+
 			"T = %.3fC, P = %.2fhPa, H = %.1f%%, U = %d",
 			a.Addr().String(),
@@ -191,7 +200,7 @@ func advHandler(a ble.Advertisement) {
 
 	payload, _ := json.Marshal(msg)
 
-	topic := cfg.Options["topicPrefix"].(string) + "/" + d.Name
+	topic := cfg.Options.TopicPrefix + "/" + d.Name
 
 	publish(string(payload), topic)
 }
