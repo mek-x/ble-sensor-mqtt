@@ -43,14 +43,15 @@ type device struct {
 }
 
 type Opts struct {
-	CfgFile     string
-	ActiveScan  bool
-	Url         string
-	User        string
-	Pass        string
-	Verbose     bool
-	TopicPrefix string
-	Interval    int
+	CfgFile       string
+	ActiveScan    bool
+	Url           string
+	User          string
+	Pass          string
+	Verbose       bool
+	TopicPrefix   string
+	Interval      int
+	HassDiscovery bool
 }
 
 type config struct {
@@ -99,6 +100,12 @@ func (c *config) updateFromEnv() {
 			if err != nil {
 				c.Options.Interval = 0
 			}
+		case pair[0] == "BLE_HASS_DSCVR":
+			if pair[1] == "true" || pair[1] == "1" || pair[1] == "on" {
+				c.Options.HassDiscovery = true
+			} else {
+				c.Options.HassDiscovery = false
+			}
 		}
 	}
 }
@@ -108,13 +115,14 @@ func main() {
 
 	cfg.Devices = make(map[string]device)
 	flag.StringVar(&cfg.Options.CfgFile, "c", "ble-sensor-mqtt.yml", "config file (yaml format)")
-	flag.BoolVar(&cfg.Options.ActiveScan, "as", false, "acitve scan")
+	flag.BoolVar(&cfg.Options.ActiveScan, "as", false, "active scan")
 	flag.StringVar(&cfg.Options.Url, "url", "", "mqtt host url, e.g. ssl://host.com:8883")
 	flag.StringVar(&cfg.Options.User, "user", "", "mqtt user name")
 	flag.StringVar(&cfg.Options.Pass, "pass", "", "mqtt password")
 	flag.BoolVar(&cfg.Options.Verbose, "V", false, "print broadcasted messages")
-	flag.StringVar(&cfg.Options.TopicPrefix, "pfx", "/ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
+	flag.StringVar(&cfg.Options.TopicPrefix, "pfx", "ble-sensor", "topic prefix. Full topic will be {topicPre}/{deviceName}")
 	flag.IntVar(&cfg.Options.Interval, "t", 0, "how often send messages to broker in seconds, 0 - as soon as packet received")
+	flag.BoolVar(&cfg.Options.HassDiscovery, "hass", false, "enable Home Assistant MQTT discovery")
 
 	flag.Parse()
 
@@ -165,6 +173,15 @@ func main() {
 		}()
 	}
 
+	if cfg.Options.HassDiscovery {
+		for addr, dev := range cfg.Devices {
+			topic := HassGetTopic(dev.Name)
+			msg := HassGetDiscoveryMessage(dev.Name, dev.Type, addr, cfg.Options.TopicPrefix)
+
+			cfg.mqtt.publish(msg, topic)
+		}
+	}
+
 	cfg.msgPipe = make(chan payload)
 	defer close(cfg.msgPipe)
 
@@ -175,7 +192,7 @@ func main() {
 	ble.SetDefaultDevice(d)
 
 	go cfg.sender()
-	// Scan for specified durantion, or until interrupted by user.
+	// Scan for specified duration, or until interrupted by user.
 	ctx := ble.WithSigHandler(context.WithCancel(context.Background()))
 	chkErr(ble.Scan(ctx, true, cfg.advHandler, nil))
 }
@@ -225,7 +242,7 @@ func (cfg *config) sendPayload(msg payload) {
 	payload, _ := json.Marshal(msg)
 	topic := cfg.Options.TopicPrefix + "/" + msg.Name
 
-	log.Println(string(payload))
+	//log.Println(string(payload))
 	cfg.mqtt.publish(string(payload), topic)
 }
 
